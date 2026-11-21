@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Passcode" />
+  <title>iOS Passcode Magic</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+    }
+
+    /* Layar Home Screen Asli (Screenshot Anda) */
+    .homescreen-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background-color: #000;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transform: scale(1);
+      transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .homescreen-bg.locked-state {
+      transform: scale(1.06);
+    }
+
+    /* Penutup jam bawaan screenshot & Jam Live Real-Time */
+    .live-clock-patch {
+      position: fixed;
+      top: max(11px, env(safe-area-inset-top, 11px));
+      left: 14px;
+      width: 72px;
+      height: 24px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      color: #ffffff;
+      backdrop-filter: blur(18px) brightness(0.85);
+      -webkit-backdrop-filter: blur(18px) brightness(0.85);
+      background-color: rgba(0, 0, 0, 0.35);
+      z-index: 2;
+      transition: opacity 0.3s ease;
+    }
+
+    .setup-hint {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Lapisan Blur Passcode di atas Home Screen */
+    .blur-overlay {
+      position: fixed;
+      inset: 0;
+      backdrop-filter: blur(32px) brightness(0.72);
+      -webkit-backdrop-filter: blur(32px) brightness(0.72);
+      background: rgba(15, 18, 30, 0.35);
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: env(safe-area-inset-top, 44px) 24px env(safe-area-inset-bottom, 34px);
+      transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .blur-overlay.unlocked {
+      opacity: 0;
+      transform: scale(1.12);
+      pointer-events: none;
+    }
+
+    /* Bagian Atas: Ikon Gembok & Teks */
+    .header-area {
+      margin-top: 38px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .lock-icon {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 18px;
+      fill: #fff;
+      opacity: 0.95;
+    }
+
+    .prompt-text {
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: -0.2px;
+      margin-bottom: 22px;
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    /* 6 Titik Passcode */
+    .dots-container {
+      display: flex;
+      gap: 22px;
+      height: 16px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.85);
+      background-color: transparent;
+      transition: background-color 0.08s ease;
+    }
+
+    .dot.filled {
+      background-color: #ffffff;
+      border-color: #ffffff;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      15% { transform: translateX(-16px); }
+      30% { transform: translateX(15px); }
+      45% { transform: translateX(-12px); }
+      60% { transform: translateX(10px); }
+      75% { transform: translateX(-6px); }
+      90% { transform: translateX(4px); }
+    }
+
+    .shake {
+      animation: shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    /* Keypad Bulat iOS */
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 78px);
+      gap: 16px 26px;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    .key {
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.16);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.25s ease;
+    }
+
+    .key:active, .key.active-tap {
+      background: rgba(255, 255, 255, 0.5);
+      transition: background-color 0.02s ease;
+    }
+
+    .key .num {
+      font-size: 34px;
+      font-weight: 300;
+      line-height: 1;
+      color: #fff;
+    }
+
+    .key .letters {
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 1.8px;
+      margin-top: 3px;
+      color: rgba(255, 255, 255, 0.9);
+      height: 11px;
+    }
+
+    .key.empty {
+      background: transparent;
+      pointer-events: none;
+    }
+
+    /* Baris Bawah */
+    .bottom-bar {
+      width: 100%;
+      max-width: 300px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 8px 8px;
+      font-size: 16px;
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .bottom-btn {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    /* Zona Rahasia di Home Screen: Ketuk 2x pojok kiri atas untuk kunci ulang */
+    .relock-zone {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 115px;
+      height: 75px;
+      z-index: 2;
+    }
+
+    /* Peek Kode Penonton (Samar di bawah dock Home Screen) */
+    .peek-code {
+      position: fixed;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.22);
+      letter-spacing: 3px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .secret-toast {
+      position: fixed;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.78);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 14px;
+      border-radius: 16px;
+      font-size: 12px;
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      z-index: 10;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Input File Tersembunyi untuk Upload Screenshot -->
+  <input type="file" id="bgUpload" accept="image/*" style="display:none" />
+
+  <!-- Tampilan Home Screen Asli Anda -->
+  <div class="homescreen-bg locked-state" id="homescreenBg">
+    <div class="setup-hint" id="setupHint">
+      Belum ada screenshot Home Screen.<br><br>
+      Ketuk 2x pojok kiri atas untuk kembali ke layar kunci,<br>
+      lalu ketuk <b>"Darurat" 5 kali</b> untuk memilih screenshot iPhone Anda.
+    </div>
+  </div>
+
+  <!-- Jam Live Real-Time + Penutup Jam Screenshot -->
+  <div class="live-clock-patch" id="liveClock">12:00</div>
+
+  <!-- Zona Rahasia Kunci Ulang & Peek Angka -->
+  <div class="relock-zone" id="relockZone"></div>
+  <div class="peek-code" id="peekCode"></div>
+
+  <div class="secret-toast" id="secretToast"></div>
+
+  <!-- Layar Kunci Passcode -->
+  <div class="blur-overlay" id="lockOverlay">
+    <div class="header-area">
+      <svg class="lock-icon" viewBox="0 0 24 24">
+        <path d="M17 9h-1V7c0-2.76-2.24-5-5-5S6 4.24 6 7v2H5c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-9c0-1.1-.9-2-2-2zm-6 7.73V18c0 .55-.45 1-1 1s-1-.45-1-1v-1.27c-.6-.35-1-.99-1-1.73 0-1.1.9-2 2-2s2 .9 2 2c0 .74-.4 1.38-1 1.73zM14 9H8V7c0-1.66 1.34-3 3-3s3 1.34 3 3v2z"/>
+      </svg>
+      <div class="prompt-text" id="promptText">Masukkan Kode Sandi</div>
+      <div class="dots-container" id="dotsContainer">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+
+    <div class="keypad">
+      <div class="key" data-num="1"><span class="num">1</span><span class="letters"></span></div>
+      <div class="key" data-num="2"><span class="num">2</span><span class="letters">ABC</span></div>
+      <div class="key" data-num="3"><span class="num">3</span><span class="letters">DEF</span></div>
+      <div class="key" data-num="4"><span class="num">4</span><span class="letters">GHI</span></div>
+      <div class="key" data-num="5"><span class="num">5</span><span class="letters">JKL</span></div>
+      <div class="key" data-num="6"><span class="num">6</span><span class="letters">MNO</span></div>
+      <div class="key" data-num="7"><span class="num">7</span><span class="letters">PQRS</span></div>
+      <div class="key" data-num="8"><span class="num">8</span><span class="letters">TUV</span></div>
+      <div class="key" data-num="9"><span class="num">9</span><span class="letters">WXYZ</span></div>
+      <div class="key empty"></div>
+      <div class="key" data-num="0"><span class="num">0</span><span class="letters"></span></div>
+      <div class="key empty"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="bottom-btn" id="emergencyBtn">Darurat</div>
+      <div class="bottom-btn" id="cancelDeleteBtn">Batalkan</div>
+    </div>
+  </div>
+
+  <script>
+    let currentInput = "";
+    let attemptCount = 0;
+    let failBeforeSuccess = 0; 
+    let emergencyTapCount = 0;
+    let emergencyTapTimer = null;
+    let isProcessing = false;
+
+    const dots = document.querySelectorAll('.dot');
+    const dotsContainer = document.getElementById('dotsContainer');
+    const promptText = document.getElementById('promptText');
+    const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+    const lockOverlay = document.getElementById('lockOverlay');
+    const homescreenBg = document.getElementById('homescreenBg');
+    const setupHint = document.getElementById('setupHint');
+    const peekCode = document.getElementById('peekCode');
+    const secretToast = document.getElementById('secretToast');
+    const bgUpload = document.getElementById('bgUpload');
+    const liveClock = document.getElementById('liveClock');
+
+    // Update Jam Real-Time setiap detik
+    function updateLiveClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      liveClock.textContent = `${hours}:${minutes}`;
+    }
+    updateLiveClock();
+    setInterval(updateLiveClock, 1000);
+
+    // Muat screenshot tersimpan saat aplikasi dibuka
+    const savedBg = localStorage.getItem('magic_ios_homescreen');
+    const savedClockColor = localStorage.getItem('magic_ios_clock_bg');
+    if (savedBg) {
+      applyBackground(savedBg, savedClockColor);
+    }
+
+    function applyBackground(dataUrl, clockBgColor) {
+      homescreenBg.style.backgroundImage = `url(${dataUrl})`;
+      setupHint.style.display = 'none';
+      if (clockBgColor) {
+        liveClock.style.backgroundColor = clockBgColor;
+      }
+    }
+
+    // Kompres screenshot & ambil sampel warna wallpaper pojok kiri atas
+    bgUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const maxWidth = 1170;
+          const scale = Math.min(1, maxWidth / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          const pixel = ctx.getImageData(15, 12, 1, 1).data;
+          const sampledColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          try {
+            localStorage.setItem('magic_ios_homescreen', compressedDataUrl);
+            localStorage.setItem('magic_ios_clock_bg', sampledColor);
+            applyBackground(compressedDataUrl, sampledColor);
+            showToast("Screenshot & Jam Live Siap!");
+          } catch (err) {
+            const smallerUrl = canvas.toDataURL('image/jpeg', 0.6);
+            localStorage.setItem('magic_ios_homescreen', smallerUrl);
+            localStorage.setItem('magic_ios_clock_bg', sampledColor);
+            applyBackground(smallerUrl, sampledColor);
+            showToast("Screenshot & Jam Live Siap!");
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function updateUI() {
+      dots.forEach((dot, idx) => {
+        if (idx < currentInput.length) {
+          dot.classList.add('filled');
+        } else {
+          dot.classList.remove('filled');
+        }
+      });
+      cancelDeleteBtn.textContent = currentInput.length > 0 ? "Hapus" : "Batalkan";
+    }
+
+    // Keypad
+    document.querySelectorAll('.key[data-num]').forEach(key => {
+      key.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (isProcessing) return;
+        
+        key.classList.add('active-tap');
+        setTimeout(() => key.classList.remove('active-tap'), 120);
+
+        const num = key.getAttribute('data-num');
+        if (currentInput.length < 6) {
+          currentInput += num;
+          updateUI();
+
+          if (currentInput.length === 6) {
+            handleFullPasscode();
+          }
+        }
+      }, { passive: false });
+    });
+
+    function handleFullPasscode() {
+      isProcessing = true;
+
+      setTimeout(() => {
+        if (attemptCount < failBeforeSuccess) {
+          attemptCount++;
+          dotsContainer.classList.add('shake');
+          promptText.textContent = "Coba Lagi";
+
+          setTimeout(() => {
+            dotsContainer.classList.remove('shake');
+            currentInput = "";
+            updateUI();
+            isProcessing = false;
+          }, 500);
+        } else {
+          peekCode.textContent = currentInput;
+          lockOverlay.classList.add('unlocked');
+          homescreenBg.classList.remove('locked-state');
+          isProcessing = false;
+        }
+      }, 140);
+    }
+
+    // Hapus / Batalkan
+    cancelDeleteBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (isProcessing) return;
+      if (currentInput.length > 0) {
+        currentInput = currentInput.slice(0, -1);
+        updateUI();
+      }
+    });
+
+    // Kontrol Rahasia pada Tombol "Darurat":
+    // - Ketuk 3x: Ganti Mode (Langsung Buka vs Gagal 1x dulu)
+    // - Ketuk 5x: Upload Screenshot Home Screen
+    document.getElementById('emergencyBtn').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      emergencyTapCount++;
+      clearTimeout(emergencyTapTimer);
+
+      emergencyTapTimer = setTimeout(() => {
+        if (emergencyTapCount === 3 || emergencyTapCount === 4) {
+          failBeforeSuccess = failBeforeSuccess === 0 ? 1 : 0;
+          showToast(failBeforeSuccess === 0 ? "Mode: Langsung Buka" : "Mode: Gagal 1x Dulu");
+        } else if (emergencyTapCount >= 5) {
+          bgUpload.click();
+        }
+        emergencyTapCount = 0;
+      }, 450);
+    });
+
+    function showToast(msg) {
+      secretToast.textContent = msg;
+      secretToast.style.opacity = "1";
+      setTimeout(() => {
+        secretToast.style.opacity = "0";
+      }, 1500);
+    }
+
+    // Ketuk 2x pojok kiri atas (area jam) untuk kunci kembali
+    let lastRelockTap = 0;
+    document.getElementById('relockZone').addEventListener('touchstart', (e) => {
+      const now = Date.now();
+      if (now - lastRelockTap < 400) {
+        resetLockScreen();
+      }
+      lastRelockTap = now;
+    });
+
+    function resetLockScreen() {
+      currentInput = "";
+      attemptCount = 0;
+      promptText.textContent = "Masukkan Kode Sandi";
+      updateUI();
+      lockOverlay.classList.remove('unlocked');
+      homescreenBg.classList.add('locked-state');
+    }
+  </script>
+</body>
+</html>
